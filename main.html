@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base64 to File Converter</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Inter', sans-serif;
+        }
+        .custom-btn {
+            background-color: #3b82f6;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .custom-btn:hover {
+            background-color: #2563eb;
+        }
+        .disabled-btn {
+            background-color: #cbd5e1;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div x-data="base64Converter()" class="bg-white rounded-lg shadow-lg p-6 max-w-lg w-full">
+
+        <!-- Title -->
+        <h1 class="text-2xl font-semibold text-gray-800 mb-4 text-center">
+            Base64 to File Converter
+        </h1>
+
+        <!-- Form Section -->
+        <div class="space-y-4">
+
+            <!-- Base64 Input -->
+            <textarea x-model="base64String" placeholder="Paste your Base64 string here..."
+                class="w-full p-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="6"></textarea>
+
+            <!-- File Name Input -->
+            <input x-model="fileName" type="text" placeholder="Enter file name (e.g., file.pdf)"
+                class="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+            <!-- Download Button (Initially disabled) -->
+            <button x-bind:disabled="!canDownloadFile"
+                @click="downloadFile"
+                :class="canDownloadFile ? 'custom-btn' : 'disabled-btn'"
+                class="w-full p-3 rounded-lg font-semibold text-lg">
+                Download File
+            </button>
+
+            <!-- View PDF Button (Initially disabled) -->
+            <button x-bind:disabled="!fileDownloaded"
+                @click="viewDownloadedFile"
+                :class="fileDownloaded ? 'custom-btn' : 'disabled-btn'"
+                class="w-full p-3 rounded-lg font-semibold text-lg">
+                View PDF
+            </button>
+
+        </div>
+
+        <!-- Error Message -->
+        <div x-show="errorMessage" class="mt-4 text-red-500 text-center" x-text="errorMessage"></div>
+
+        <!-- Success Message -->
+        <div x-show="successMessage" class="mt-4 text-green-500 text-center" x-text="successMessage"></div>
+    </div>
+
+    <script>
+        function base64Converter() {
+            return {
+                base64String: '',
+                fileName: '',
+                errorMessage: '',
+                successMessage: '',
+                fileDownloaded: false,
+
+                get canDownloadFile() {
+                    // Check if both Base64 string and file name are filled out
+                    return this.base64String !== '' && this.fileName !== '';
+                },
+
+                async downloadFile() {
+                    this.errorMessage = '';
+                    this.successMessage = '';
+                    this.fileDownloaded = false;
+
+                    // Validate base64 string and file name
+                    if (!this.base64String || !this.fileName) {
+                        this.errorMessage = 'Please provide both the Base64 string and a file name.';
+                        return;
+                    }
+
+                    try {
+                        // Send POST request to the FastAPI backend
+                        const response = await fetch('http://127.0.0.1:8000/decode-base64/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                base64_string: this.base64String,
+                                output_file_name: this.fileName,
+                            }),
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.successMessage = data.message;
+                            this.fileDownloaded = true;  // Enable "View PDF" button
+                        } else {
+                            throw new Error(data.detail || 'Failed to decode Base64 string.');
+                        }
+                    } catch (error) {
+                        this.errorMessage = error.message;
+                    }
+                },
+
+                // Download the created file from the server
+                async downloadCreatedFile() {
+                    try {
+                        const fileUrl = `http://127.0.0.1:8000/static/${this.fileName}`;
+                        const link = document.createElement('a');
+                        link.href = fileUrl;
+                        link.download = this.fileName;
+                        link.click();
+
+                        // Clear the form and reset success message
+                        this.fileName = '';
+                        this.base64String = '';
+                    } catch (error) {
+                        this.errorMessage = 'File download failed.';
+                    }
+                },
+
+                // View the downloaded PDF in a new tab
+                viewDownloadedFile() {
+                    if (this.fileDownloaded) {
+                        const fileUrl = `http://127.0.0.1:8000/static/${this.fileName}`;
+                        window.open(fileUrl, '_blank');  // Open the file in a new tab
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>
